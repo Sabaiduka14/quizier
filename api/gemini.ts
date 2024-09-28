@@ -1,10 +1,14 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-const genAI = new GoogleGenerativeAI(apiKey!);
+if (!apiKey) {
+    throw new Error("Missing Gemini API key");
+}
+
+const genAI = new GoogleGenerativeAI(apiKey);
 
 const model = genAI.getGenerativeModel({
-    model: "gemini-1.5-flash",
+    model: "gemini-1.5-pro", // Updated to the latest model
 });
 
 const generationConfig = {
@@ -14,12 +18,12 @@ const generationConfig = {
     maxOutputTokens: 8192,
 };
 
-async function retryWithExponentialBackoff(fn, maxRetries = 5, initialDelay = 1000) {
+async function retryWithExponentialBackoff(fn: () => Promise<any>, maxRetries = 5, initialDelay = 1000) {
     let retries = 0;
     while (retries < maxRetries) {
         try {
             return await fn();
-        } catch (error) {
+        } catch (error: any) {
             if (error.message.includes("429") || error.message.includes("500")) {
                 retries++;
                 if (retries >= maxRetries) throw error;
@@ -47,7 +51,10 @@ export async function generateQuiz(subject: string, content: string) {
   }`;
 
     return retryWithExponentialBackoff(async () => {
-        const result = await model.generateContent(prompt);
+        const result = await model.generateContent({
+            contents: [{ role: "user", parts: [{ text: prompt }] }],
+            generationConfig,
+        });
         const response = result.response;
         const text = response.text();
 
@@ -62,7 +69,7 @@ export async function generateQuiz(subject: string, content: string) {
     });
 }
 
-export async function generateAIFeedback(quizData, selectedAnswers, score) {
+export async function generateAIFeedback(quizData: any[], selectedAnswers: string[], score: { percentage: number }) {
     const prompt = `You are an AI tutor. Based on the following quiz results, provide constructive feedback to the student. Here's the quiz data and the student's answers:
 
   ${quizData.map((q, i) => `
@@ -75,7 +82,12 @@ export async function generateAIFeedback(quizData, selectedAnswers, score) {
 
   Please provide feedback on the student's performance, highlighting areas of strength and suggesting improvements where needed. Keep the feedback encouraging and constructive do not use "" or bold text and ... just provide normal text`;
 
-    const result = await model.generateContent(prompt);
-    const response = result.response;
-    return response.text();
+    return retryWithExponentialBackoff(async () => {
+        const result = await model.generateContent({
+            contents: [{ role: "user", parts: [{ text: prompt }] }],
+            generationConfig,
+        });
+        const response = result.response;
+        return response.text();
+    });
 }

@@ -16,12 +16,13 @@ interface Generation {
     created_at: string
     subject: string
     questions: number
-    quiz_data: any
+    quiz_data: any // Consider defining a more specific type
     topic: string
+    user_id: string // Add this field
 }
 
 export default function Dashboard() {
-    const [user, setUser] = useState<any>(null)
+    const [user, setUser] = useState<any>(null) // Consider using a more specific type
     const [generations, setGenerations] = useState<Generation[]>([])
     const [isDialogOpen, setIsDialogOpen] = useState(false)
     const [showPaymentDialog, setShowPaymentDialog] = useState(false)
